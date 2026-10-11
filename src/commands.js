@@ -45,6 +45,18 @@ function dispatchCommand(store, line) {
   const args = tokens.slice(1);
 
   switch (command) {
+    case "TTL":
+      if (args.length !== 1) {
+        return "ERR wrong number of arguments";
+      }
+      return store.ttl(args[0]);
+
+    case "PERSIST":
+      if (args.length !== 1) {
+        return "ERR wrong number of arguments";
+      }
+      return store.persist(args[0]);
+
     case "PING":
       if (args.length !== 0) {
         return "ERR wrong number of arguments";
@@ -52,10 +64,16 @@ function dispatchCommand(store, line) {
       return store.ping();
 
     case "SET":
-      if (args.length !== 2) {
+      if (args.length !== 2 && args.length !== 4) {
         return "ERR wrong number of arguments";
       }
-      return store.set(args[0], args[1]);
+      if (args.length === 2) {
+        return store.set(args[0], args[1]);
+      }
+      if (args[2].toUpperCase() !== "EX") {
+        return "ERR syntax: SET key value [EX seconds]";
+      }
+      return store.set(args[0], args[1], Number(args[3]));
 
     case "GET":
       if (args.length !== 1) {
@@ -80,4 +98,4 @@ function dispatchCommand(store, line) {
   }
 }
 
-export { tokenizer, dispatchCommand };
+export { dispatchCommand };
