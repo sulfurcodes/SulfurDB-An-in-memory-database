@@ -1,8 +1,8 @@
 # SulfurDB
 
-A Redis-inspired in-memory key-value store built from scratch in JavaScript.
+A Redis inspired in memory key value store built from scratch in JavaScript.
 
-SulfurDB is an educational project focused on understanding how key-value databases work internally, starting with core storage operations and building toward a command-driven database.
+SulfurDB is an educational project focused on understanding how key value databases work internally, starting with core storage operations and building toward a command-driven database.
 
 ## Current Features
 
