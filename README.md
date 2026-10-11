@@ -2,85 +2,156 @@
 
 A Redis-inspired in-memory key-value store built from scratch in JavaScript.
 
-SulfurDB is an educational project for exploring how key-value databases work, starting with core storage operations and gradually expanding toward more advanced database features.
+SulfurDB is an educational project focused on understanding how key-value databases work internally, starting with core storage operations and building toward a command-driven database.
 
-## Current features
+## Current Features
 
+### Core Storage
 - Store and overwrite key-value pairs in memory.
-- Retrieve a value by key.
+- Retrieve values by key.
 - Check whether a key exists.
-- Delete a key.
-- Reject an empty-string key.
-- Return `null` when a key is missing.
+- Delete keys.
+- Reject empty-string keys.
+- Distinguish missing keys from stored empty-string values.
 - Basic `PING` response.
 
-Data is stored in a JavaScript `Map` and is lost when the process exits. SulfurDB does not yet provide persistence, a command-line REPL, or a network protocol.
+### Command Interface
+- Tokenize command-line input into arguments.
+- Support quoted values containing spaces.
+- Support empty quoted values.
+- Dispatch commands to the storage layer.
+- Accept case-insensitive command names while keeping keys case-sensitive.
+- Validate command argument counts.
+- Handle unknown commands.
+- Interactive terminal REPL built with Node.js `readline`.
+- Exit the REPL using `EXIT`.
 
-## Current API
+## Supported Commands
 
-The current version is used directly from JavaScript by creating a `Store` instance.
+| Command | Syntax | Description |
+|---|---|---|
+| `PING` | `PING` | Check whether SulfurDB responds. |
+| `SET` | `SET key value` | Store a value or overwrite an existing one. |
+| `GET` | `GET key` | Retrieve a value by key. |
+| `EXISTS` | `EXISTS key` | Check whether a key exists. |
+| `DEL` | `DEL key` | Delete a key. |
+| `EXIT` | `EXIT` | Exit the interactive REPL. |
 
-| Method | Current behavior |
-| --- | --- |
-| `ping()` | Returns `"PONG"`. |
-| `set(key, value)` | Stores or overwrites a value and returns `"OK"`. Returns an error message when `key` is an empty string. |
-| `get(key)` | Returns the stored value, or `null` if the key does not exist. Returns an error message when `key` is an empty string. |
-| `exists(key)` | Returns `true` if the key exists, otherwise `false`. Returns an error message when `key` is an empty string. |
-| `delete(key)` | Deletes a key and returns `"Deleted"`; returns `"Key does not exist"` when no key was deleted. Returns an error message when `key` is an empty string. |
+Command names are case-insensitive. Keys and values preserve their case.
 
-The API is still evolving. Input validation and the separation between storage logic and command-response formatting may change as the project grows.
-
-## Quick start
+## Getting Started
 
 ### Requirements
 
-- Node.js 18 or newer recommended
-- Git (optional, for cloning and version control)
+- Node.js 18 or newer recommended.
+- Git, for cloning the repository.
 
-### Set up locally
+### Installation
 
 Clone the repository and enter the project directory:
 
-```powershell
+```bash
 git clone https://github.com/sulfurcodes/SulfurDB-An-in-memory-database.git
 cd SulfurDB-An-in-memory-database
 ```
 
-No third-party dependencies are currently required.
+SulfurDB currently uses Node.js built-in modules and does not require third-party runtime dependencies.
 
-### Try the current API
+### Run the REPL
 
-Create a JavaScript file or run the example from the project root:
+Start the interactive command-line interface:
 
-```javascript
-import Store from './src/store.js';
-
-const db = new Store();
-
-console.log(db.ping());                  // PONG
-console.log(db.set('sulfurcodes', '19'));  // OK
-console.log(db.get('sulfurcodes'));          // 19
-console.log(db.exists('sulfurcodes'));       // true
-console.log(db.delete('sulfurcodes'));       // Deleted
-console.log(db.exists('sulfurcodes'));       // false
-console.log(db.get('missing'));           // null
+```bash
+node src/repl.js
 ```
 
-The project uses JavaScript ES modules, configured with `"type": "module"` in `package.json`.
+Example session:
 
-## Development and tests
-
-The current `tests/store_test.js` file is a manual smoke test that prints the outputs of the core methods. Run it from the project root:
-
-```powershell
-node tests/store_test.js
+```text
+sulfurdb> PING
+PONG
+sulfurdb> SET username "Isam Ali"
+OK
+sulfurdb> GET username
+Isam Ali
+sulfurdb> EXISTS username
+true
+sulfurdb> DEL username
+Deleted
+sulfurdb> EXISTS username
+false
+sulfurdb> EXIT
 ```
 
-Automated tests with assertions and edge-case coverage are planned for a future development phase. The current `npm test` script is only a placeholder and will fail until a real test runner is configured.
+Responses shown in the example illustrate the intended interaction; exact output depends on the current Store and dispatcher implementations.
 
-## Roadmap
+### Quoted Values
 
-Planned features may include stronger input validation, automated tests, key expiration (TTL), a command interface, persistence, and a network server. These are not implemented in the current version.
+Double quotes allow values containing spaces to be passed as a single argument.
+
+```text
+sulfurdb> SET message "Hello SulfurDB"
+sulfurdb> GET message
+Hello SulfurDB
+```
+
+An empty quoted string can represent an empty value:
+
+```text
+sulfurdb> SET message ""
+```
+
+The tokenizer's supported escape syntax and malformed-input behavior are still being developed.
+
+## Architecture
+
+SulfurDB separates storage, command processing, and terminal input into distinct layers.
+
+```text
+src/
+├── store.js       # In-memory key-value storage
+├── commands.js    # Tokenizer and command dispatcher
+└── repl.js        # Interactive command-line interface
+
+test/
+└── commands.test.js
+```
+
+### Store
+
+The storage layer manages key-value operations independently of terminal input. Data is held in memory and is lost when the process exits.
+
+### Command Parser and Dispatcher
+
+The command layer converts input into tokens, validates command arguments, identifies the requested operation, and delegates storage operations to the Store instance.
+
+### REPL
+
+The Read-Eval-Print Loop uses Node.js `readline` to read commands, execute them through the dispatcher, display responses, and handle exit and end-of-input events.
+
+## Development and Tests
+
+Run the automated test suite using Node.js's built-in test runner:
+
+```bash
+node --test
+```
+
+Run the command tests directly:
+
+```bash
+node --test test/commands.test.js
+```
+
+The tests should cover supported commands, command-name casing, key case sensitivity, argument validation, unknown commands, quoted values, empty quoted values, and malformed quoting.
+
+## Current Limitations
+
+- Storage is in-memory only; data does not survive process restarts.
+- There is no TCP server or Redis wire-protocol compatibility.
+- Persistence, snapshots, and recovery are not implemented.
+- Advanced data structures and expiration policies are not implemented.
+- The command parser and response conventions may evolve as the project develops.
 
 ## License
 
