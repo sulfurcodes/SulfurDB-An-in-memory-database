@@ -87,7 +87,7 @@ function dispatchCommand(store, line) {
       }
       return store.exists(args[0]);
 
-    case "DELETE":
+    case "DEL":
       if (args.length !== 1) {
         return "ERR wrong number of arguments";
       }
