@@ -1,7 +1,7 @@
 {
   "name": "sulfurdb",
   "version": "1.0.0",
-  "description": "A Redis-inspired in-memory key-value store built from scratch in Python.",
+  "description": "A Redis-inspired in-memory key-value store built from scratch in Javascript.",
   "main": "index.js",
   "directories": {
     "test": "tests"

@@ -2,7 +2,7 @@
 
 A Redis-inspired in-memory key-value store built from scratch in JavaScript.
 
-SulfurDB is an educational project exploring how key-value databases work internally. It starts with fundamental storage operations and gradually introduces command parsing, expiration, and database behavior.
+SulfurDB is an educational project exploring how key-value databases work internally, from storage semantics and command parsing to key expiration and a terminal interface.
 
 ## Current Features
 
@@ -32,7 +32,7 @@ SulfurDB is an educational project exploring how key-value databases work intern
 - Remove expiration while preserving a value with `PERSIST`.
 - Reset or clear expiration when overwriting an existing key.
 - Use a monotonic clock for in-process expiration.
-- Inject a custom clock for deterministic expiration tests.
+- Inject a custom clock into the store for deterministic expiration tests.
 
 ## Supported Commands
 
@@ -72,9 +72,10 @@ An expired key behaves like a missing key for `GET`, `EXISTS`, `DEL`, and `TTL`.
 ```bash
 git clone https://github.com/sulfurcodes/SulfurDB-An-in-memory-database.git
 cd SulfurDB-An-in-memory-database
+npm install
 ```
 
-SulfurDB currently uses Node.js built-in modules and does not require third-party runtime dependencies.
+SulfurDB's core uses Node.js built-in modules. The repository also includes an Express-based integration example in `tests/api_test.js`, which uses the project's Express dependency.
 
 ### Start the REPL
 
@@ -88,11 +89,11 @@ node src/repl.js
 sulfurdb> PING
 PONG
 
-sulfurdb> SET username "Isam Ali"
+sulfurdb> SET username "Sulfurcodes"
 OK
 
 sulfurdb> GET username
-Isam Ali
+Sulfurcodes
 
 sulfurdb> SET session abc123 EX 60
 OK
@@ -124,51 +125,54 @@ src/
 ├── commands.js    # Tokenizer and command dispatcher
 └── repl.js        # Interactive terminal interface
 
-test/
-├── store.test.js
-└── commands.test.js
+tests/
+├── store_test.js  # Current store smoke test
+└── api_test.js    # Express integration example
 ```
 
 ### Store
 
-The Store maintains a `Map` for values and a separate `Map` for expiration deadlines. Expired keys are purged lazily when operations access them.
+The `Store` class maintains a `Map` for values and a separate `Map` for expiration deadlines. Expired keys are purged lazily when operations access them.
 
-Expiration uses Node.js's monotonic performance clock. A custom clock can be injected into the Store to test expiry behavior without waiting in real time.
+Expiration uses Node.js's monotonic performance clock. A custom clock can be injected into the store to test expiration behavior without waiting in real time.
 
 ### Command Parser and Dispatcher
 
-The command layer tokenizes input, validates command syntax and argument counts, and delegates operations to the Store.
+The command layer tokenizes input, validates command syntax and argument counts, and delegates operations to the `Store`.
 
 ### REPL
 
-The REPL reads commands using Node.js `readline`, dispatches them, prints responses, and handles exit and end-of-input events.
+The REPL reads commands using Node.js `readline`, dispatches them, prints responses, and exits when `EXIT` is entered.
+
+### Express Integration Example
+
+`tests/api_test.js` shows how an Express route can use a `Store` instance as an in-process cache and return `X-Cache: HIT` or `X-Cache: MISS` headers. This is an example integration, not a standalone SulfurDB server; the data belongs to the process that created the `Store` instance.
 
 ## Development and Tests
 
-Run tests with Node.js's built-in test runner:
+Run the current store smoke-test file with:
 
 ```bash
-node --test
+node tests/store_test.js
 ```
 
-Run a specific test file:
+Run the Express integration example with:
 
 ```bash
-node --test test/store.test.js
-node --test test/commands.test.js
+node tests/api_test.js
 ```
 
-The test suite should cover storage operations, command validation, expiration boundaries, TTL behavior, overwrite semantics, and persistence of individual keys through `PERSIST`.
-
-Ensure these test files exist at the documented paths before using the individual commands.
+The Express example listens on port `5000`. These files are currently a smoke test and an integration example, not a comprehensive automated test suite. The package's `npm test` script is not configured yet.
 
 ## Current Limitations
 
-- All data is in memory and is lost when the process exits.
-- There is no TCP server or Redis wire-protocol compatibility.
+- All data is held in memory and is lost when the process exits.
+- No standalone TCP database server or client is implemented.
+- SulfurDB does not implement the Redis wire protocol and is not compatible with standard Redis clients.
 - Disk persistence, snapshots, and recovery are not implemented.
 - Advanced data structures and additional database commands are not implemented.
-- The tokenizer still needs stronger malformed-quoting validation and a documented escape grammar.
+- The tokenizer needs stronger malformed-quoting validation and a documented escape grammar.
+- Automated test coverage is still limited.
 - The command interface and response conventions may evolve as development continues.
 
 ## License
