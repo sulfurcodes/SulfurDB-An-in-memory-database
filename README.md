@@ -1,6 +1,8 @@
 # SulfurDB
 
-A Redis-inspired in-memory key-value store built from scratch in Python.
+A Redis-inspired in-memory key-value store built from scratch in JavaScript.
+
+SulfurDB is an educational project for exploring how key-value databases work, starting with core storage operations and gradually expanding toward more advanced database features.
 
 ## Current features
 
@@ -8,31 +10,31 @@ A Redis-inspired in-memory key-value store built from scratch in Python.
 - Retrieve a value by key.
 - Check whether a key exists.
 - Delete a key.
-- Reject an empty key in `SET`.
-- Distinguish a missing key from an empty-string value in existence and deletion checks.
+- Reject an empty-string key.
+- Return `null` when a key is missing.
 - Basic `PING` response.
 
-All data is held in a Python dictionary and is lost when the process exits.
+Data is stored in a JavaScript `Map` and is lost when the process exits. SulfurDB does not yet provide persistence, a command-line REPL, or a network protocol.
 
 ## Current API
 
-SulfurDB is currently used directly from Python; it does not yet provide a command-line REPL or a network protocol.
+The current version is used directly from JavaScript by creating a `Store` instance.
 
 | Method | Current behavior |
 | --- | --- |
-| `PING()` | Returns `"PONG"`. |
-| `SET(key, value)` | Stores or overwrites a value and returns `"OK"`. Returns an error message when the key is an empty string. |
-| `GET(key)` | Returns the value, or `None` when the key does not exist. Calling without a key returns a prompt message. |
-| `EXISTS(key)` | Returns the string `"1"` if the key exists, otherwise `"0"`. Calling without a key returns a prompt message. |
-| `DELETE(key)` | Returns the string `"1"` if the key is deleted, otherwise `"0"`. Calling without a key returns a prompt message. |
+| `ping()` | Returns `"PONG"`. |
+| `set(key, value)` | Stores or overwrites a value and returns `"OK"`. Returns an error message when `key` is an empty string. |
+| `get(key)` | Returns the stored value, or `null` if the key does not exist. Returns an error message when `key` is an empty string. |
+| `exists(key)` | Returns `true` if the key exists, otherwise `false`. Returns an error message when `key` is an empty string. |
+| `delete(key)` | Deletes a key and returns `"Deleted"`; returns `"Key does not exist"` when no key was deleted. Returns an error message when `key` is an empty string. |
 
-The API is still evolving. In particular, invalid input handling and return types may change as the storage engine is separated from command-response formatting.
+The API is still evolving. Input validation and the separation between storage logic and command-response formatting may change as the project grows.
 
 ## Quick start
 
 ### Requirements
 
-- Python 3.12 or newer
+- Node.js 18 or newer recommended
 - Git (optional, for cloning and version control)
 
 ### Set up locally
@@ -44,47 +46,41 @@ git clone https://github.com/sulfurcodes/SulfurDB-An-in-memory-database.git
 cd SulfurDB-An-in-memory-database
 ```
 
-Create and activate a virtual environment in PowerShell:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-Install SulfurDB in editable mode with the development dependencies:
-
-```powershell
-python -m pip install -e ".[dev]"
-```
+No third-party dependencies are currently required.
 
 ### Try the current API
 
-Run Python from the activated environment:
+Create a JavaScript file or run the example from the project root:
 
-```python
-from sulfurdb import SulfurDB
+```javascript
+import Store from './src/store.js';
 
-db = SulfurDB()
+const db = new Store();
 
-print(db.PING())                  # PONG
-print(db.SET("username", "Isam")) # OK
-print(db.GET("username"))         # Isam
-print(db.EXISTS("username"))      # 1
-print(db.DELETE("username"))      # 1
-print(db.EXISTS("username"))      # 0
+console.log(db.ping());                  // PONG
+console.log(db.set('sulfurcodes', '19'));  // OK
+console.log(db.get('sulfurcodes'));          // 19
+console.log(db.exists('sulfurcodes'));       // true
+console.log(db.delete('sulfurcodes'));       // Deleted
+console.log(db.exists('sulfurcodes'));       // false
+console.log(db.get('missing'));           // null
 ```
 
-This is an API example, not a command-line database client.
+The project uses JavaScript ES modules, configured with `"type": "module"` in `package.json`.
 
 ## Development and tests
 
-Pytest is configured in `pyproject.toml`. Run:
+The current `tests/store_test.js` file is a manual smoke test that prints the outputs of the core methods. Run it from the project root:
 
 ```powershell
-python -m pytest -v
+node tests/store_test.js
 ```
 
-The current `tests/test_store.py` file is a manual smoke-test script that prints results; it does not yet contain pytest test functions and assertions. Automated behavior and edge-case tests are part of the next development phase.
+Automated tests with assertions and edge-case coverage are planned for a future development phase. The current `npm test` script is only a placeholder and will fail until a real test runner is configured.
+
+## Roadmap
+
+Planned features may include stronger input validation, automated tests, key expiration (TTL), a command interface, persistence, and a network server. These are not implemented in the current version.
 
 ## License
 
