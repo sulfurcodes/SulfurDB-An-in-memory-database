@@ -1,10 +1,14 @@
 import { performance } from "node:perf_hooks";
 
 class Store {
-  constructor({ now = () => performance.now() } = {}) {
+  constructor({
+    now = () => performance.now(),
+    wallNow = () => Date.now(),
+  } = {}) {
     this.store = new Map();
     this.expirations = new Map();
     this.now = now;
+    this.wallNow = wallNow;
   }
 
   #purgeIfExpired(key, currentTime = this.now()) {
@@ -45,6 +49,43 @@ class Store {
       return 0;
     }
     return this.expirations.delete(key) ? 1 : 0;
+  }
+
+  createSnapshot() {
+    const now = this.now();
+    const wallNow = this.wallNow();
+    const entries = [];
+
+    for (const [key, value] of this.store) {
+      const deadline = this.expirations.get(key);
+      const expiresAt =
+        deadline === undefined ? null : wallNow + (deadline - now);
+      if (expiresAt !== null && expiresAt <= wallNow) {
+        continue;
+      }
+      entries.push({ key, value, expiresAt });
+    }
+    return { version: 1, entries };
+  }
+
+  loadSnapshot(snapshot) {
+    if (snapshot?.version !== 1 || !Array.isArray(snapshot.entries)) {
+      throw new Error("Invalid snapshot");
+    }
+    this.store.clear();
+    this.expirations.clear();
+    const now = this.now();
+    const wallNow = this.wallNow();
+
+    for (const { key, value, expiresAt } of snapshot.entries) {
+      if (expiresAt !== null && expiresAt <= wallNow) {
+        continue;
+      }
+      this.store.set(key, value);
+      if (expiresAt !== null) {
+        this.expirations.set(key, now + (expiresAt - wallNow));
+      }
+    }
   }
 
   ping() {

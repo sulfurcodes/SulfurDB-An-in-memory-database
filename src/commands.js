@@ -36,7 +36,7 @@ function tokenizer(expression) {
   return tokens;
 }
 
-function dispatchCommand(store, line) {
+function dispatchCommand(store, line, onWrite = () => {}) {
   const tokens = tokenizer(line);
   if (tokens.length === 0) {
     return "";
@@ -63,17 +63,22 @@ function dispatchCommand(store, line) {
       }
       return store.ping();
 
-    case "SET":
+    case "SET": {
       if (args.length !== 2 && args.length !== 4) {
         return "ERR wrong number of arguments";
       }
-      if (args.length === 2) {
-        return store.set(args[0], args[1]);
-      }
-      if (args[2].toUpperCase() !== "EX") {
+      if (args.length === 4 && args[2].toUpperCase() !== "EX") {
         return "ERR syntax: SET key value [EX seconds]";
       }
-      return store.set(args[0], args[1], Number(args[3]));
+      const result =
+        args.length === 2
+          ? store.set(args[0], args[1])
+          : store.set(args[0], args[1], Number(args[3]));
+      if (result === "OK") {
+        onWrite();
+      }
+      return result;
+    }
 
     case "GET":
       if (args.length !== 1) {
@@ -91,7 +96,11 @@ function dispatchCommand(store, line) {
       if (args.length !== 1) {
         return "ERR wrong number of arguments";
       }
-      return store.delete(args[0]);
+      const result = store.delete(args[0]);
+      if (result === "Deleted") {
+        onWrite();
+      }
+      return result;
 
     default:
       return `ERR unknown command: ${command}`;
