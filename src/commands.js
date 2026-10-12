@@ -55,7 +55,11 @@ function dispatchCommand(store, line, onWrite = () => {}) {
       if (args.length !== 1) {
         return "ERR wrong number of arguments";
       }
-      return store.persist(args[0]);
+      const resultt = store.persist(args[0]);
+      if (resultt === 1) {
+        onWrite();
+      }
+      return resultt;
 
     case "PING":
       if (args.length !== 0) {
@@ -101,6 +105,19 @@ function dispatchCommand(store, line, onWrite = () => {}) {
         onWrite();
       }
       return result;
+
+    case "INCR":
+    case "DECR": {
+      if (args.length !== 1) {
+        return "ERR wrong number of arguments";
+      }
+      const result =
+        command === "INCR" ? store.incr(args[0]) : store.decr(args[0]);
+      if (typeof result === "number") {
+        onWrite();
+      }
+      return result;
+    }
 
     default:
       return `ERR unknown command: ${command}`;

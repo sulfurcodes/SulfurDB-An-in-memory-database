@@ -88,6 +88,34 @@ class Store {
     }
   }
 
+  #increment(key, amount) {
+    if (key === "") {
+      return "Key cannot be empty";
+    }
+    this.#purgeIfExpired(key);
+    const currentValue = this.store.has(key) ? this.store.get(key) : "0";
+    if (
+      !/^-?\d+$/.test(currentValue) ||
+      !Number.isSafeInteger(Number(currentValue))
+    ) {
+      return "ERR value is not an integer or out of range";
+    }
+    const nextValue = Number(currentValue) + amount;
+    if (!Number.isSafeInteger(nextValue)) {
+      return "ERR value is not an integer or out of range";
+    }
+    this.store.set(key, String(nextValue));
+    return nextValue;
+  }
+
+  incr(key) {
+    return this.#increment(key, 1);
+  }
+
+  decr(key) {
+    return this.#increment(key, -1);
+  }
+
   ping() {
     return "PONG";
   }
