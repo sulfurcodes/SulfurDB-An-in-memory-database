@@ -1,180 +1,288 @@
 # SulfurDB
 
-A Redis-inspired in-memory key-value store built from scratch in JavaScript.
+A Redis inspired in-memory key-value store built from scratch in JavaScript. Parses commands, stores data in memory, expires keys with TTLs, and saves snapshots to disk so your data survives a restart. All with a core that uses nothing but Node.js built-ins.
 
-SulfurDB is an educational project exploring how key-value databases work internally, from storage semantics and command parsing to key expiration and a terminal interface.
+![Node.js](https://img.shields.io/badge/Node.js_18+-339933?style=flat&logo=node.js&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript_ESM-F7DF1E?style=flat&logo=javascript&logoColor=black)
+![Express](https://img.shields.io/badge/Express_5_-000000?style=flat&logo=express&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-## Current Features
+## Preview
 
-### Core Storage
-- Store and overwrite key-value pairs in memory.
-- Retrieve values by key.
-- Check whether a key exists.
-- Delete keys.
-- Reject empty-string keys.
-- Distinguish missing keys from stored empty-string values.
-- Basic `PING` response.
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <h3>Core Commands</h3>
+      <img src="images/image1.png" width="100%" alt="SulfurDB core commands: PING, SET, GET, INCR, DECR and EXISTS">
+    </td>
+    <td width="50%" align="center">
+      <h3>TTL and PERSIST</h3>
+      <img src="images/image2.png" width="100%" alt="SulfurDB TTL expiration and PERSIST commands">
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <h3>Persistence</h3>
+      <img src="images/image3.png" width="100%" alt="SulfurDB persistence across restarts">
+    </td>
+    <td width="50%" align="center">
+      <h3>Benchmark Results</h3>
+      <img src="images/benchmark.png" width="100%" alt="SulfurDB Autocannon HTTP benchmark results">
+    </td>
+  </tr>
+</table>
 
-### Command Interface
-- Tokenize command-line input into arguments.
-- Support quoted values containing spaces and empty quoted values.
-- Dispatch commands to the storage layer.
-- Accept case-insensitive command names.
-- Preserve key and value casing.
-- Validate command argument counts.
-- Interactive terminal REPL using Node.js `readline`.
-- Exit the REPL using `EXIT`.
+## Features
 
-### Key Expiration
-- Set expiration using `SET key value EX seconds`.
-- Automatically remove expired keys when accessed.
-- Query remaining lifetime with `TTL`.
-- Remove expiration while preserving a value with `PERSIST`.
-- Reset or clear expiration when overwriting an existing key.
-- Use a monotonic clock for in-process expiration.
-- Inject a custom clock into the store for deterministic expiration tests.
+- **Key-value storage**: store, overwrite, read, check and delete keys, backed by a JavaScript `Map`
+- **Key expiration**: `SET key value EX seconds` with lazy expiry, `TTL` to inspect the remaining lifetime and `PERSIST` to remove it
+- **Atomic counters**: `INCR` and `DECR` with integer validation and overflow protection (safe-integer range)
+- **Disk snapshots**: every successful write saves `data/snapshot.json`, and the snapshot is loaded back on startup. Expiry deadlines survive restarts, and keys that expired while the server was down are dropped on load
+- **Command parser**: tokenizer with single/double quoted values (spaces and empty strings supported), case-insensitive command names, and argument-count validation
+- **Interactive REPL**: a terminal interface built on `node:readline`
+- **Monotonic expiry clock**: expiration uses `performance.now()`, so system clock changes can't expire or resurrect keys. Snapshots convert deadlines to wall-clock time only when saving or loading
+- **Injectable clock**: pass your own `now()` into the store for deterministic expiry tests, with no `sleep` needed
+- **Embeddable**: use the `Store` class directly as an in-process cache, as shown in the Express example
 
-## Supported Commands
+## Tech stack
 
-| Command | Syntax | Description |
+| Layer | Tech |
+|---|---|
+| Runtime | Node.js 18+, ES modules |
+| Language | JavaScript |
+| Storage | In-memory `Map` (values) + `Map` (expiry deadlines) |
+| Interface | `node:readline` REPL |
+| Persistence | `node:fs` JSON snapshots |
+| Integration example | Express 5 |
+| Benchmarking | autocannon |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["REPL (readline)"] --> B["Tokenizer"]
+    B --> C["Command dispatcher"]
+    C --> D[("Store<br/>values + expirations")]
+    C -- "after a successful write" --> E["Snapshot<br/>data/snapshot.json"]
+    E -. "loaded on startup" .-> D
+```
+
+1. The **REPL** reads a line and hands it to the dispatcher.
+2. The **tokenizer** splits it into arguments, respecting quotes.
+3. The **dispatcher** validates the command and argument count, then calls the `Store`.
+4. The **store** reads or writes its maps. Expired keys are purged lazily whenever they are touched.
+5. After any successful write (`SET`, `DEL`, `INCR`, `DECR`, `PERSIST`), the REPL **saves a snapshot** to disk.
+
+## Supported commands
+
+| Command | Syntax | Returns |
 |---|---|---|
-| `PING` | `PING` | Returns `PONG`. |
-| `SET` | `SET key value` | Stores a permanent key-value pair. |
-| `SET` with TTL | `SET key value EX seconds` | Stores a value with an expiration deadline. |
-| `GET` | `GET key` | Retrieves a value, or `null` if missing or expired. |
-| `EXISTS` | `EXISTS key` | Checks whether a key exists. |
-| `DEL` | `DEL key` | Deletes a key. |
-| `TTL` | `TTL key` | Returns the remaining lifetime of a key. |
-| `PERSIST` | `PERSIST key` | Removes expiration from an existing key. |
-| `EXIT` | `EXIT` | Exits the REPL. |
+| `PING` | `PING` | `PONG` |
+| `SET` | `SET key value` | `OK` |
+| `SET` with TTL | `SET key value EX seconds` | `OK` |
+| `GET` | `GET key` | The value, or `null` if the key is missing or expired |
+| `EXISTS` | `EXISTS key` | `true` / `false` |
+| `DEL` | `DEL key` | `Deleted` / `Key does not exist` |
+| `TTL` | `TTL key` | Remaining seconds, `-1` or `-2` (see below) |
+| `PERSIST` | `PERSIST key` | `1` if the expiry was removed, otherwise `0` |
+| `INCR` | `INCR key` | The new integer value |
+| `DECR` | `DECR key` | The new integer value |
+| `EXIT` | `EXIT` | Closes the REPL |
 
-Command names are case-insensitive. Keys remain case-sensitive.
+Command names are case-insensitive. Keys and values keep their casing. Quote values that contain spaces:
 
-### TTL Return Values
+```text
+SET greeting "hello world"
+SET empty ""
+```
 
-| Return value | Meaning |
+### TTL return values
+
+| Value | Meaning |
 |---:|---|
-| `-2` | Key does not exist or has expired. |
-| `-1` | Key exists without an expiration. |
-| `0` or greater | Remaining whole seconds, rounded down. |
+| `-2` | The key does not exist (or has expired) |
+| `-1` | The key exists with no expiration |
+| `0` or more | Remaining whole seconds, rounded down |
 
-An expired key behaves like a missing key for `GET`, `EXISTS`, `DEL`, and `TTL`.
+An expired key behaves exactly like a missing key for `GET`, `EXISTS`, `DEL`, `TTL`, `PERSIST` and `INCR`/`DECR`.
 
-## Getting Started
+### Counters
 
-### Requirements
+- `INCR` / `DECR` on a missing key start from `0`
+- Existing TTLs are **preserved** when a counter changes
+- Non-integer values and results outside the safe-integer range return `ERR value is not an integer or out of range`
 
-- Node.js 18 or newer recommended.
-- Git, for cloning and version control.
+### Errors
 
-### Installation
+| Response | When |
+|---|---|
+| `ERR wrong number of arguments` | Wrong argument count for the command |
+| `ERR syntax: SET key value [EX seconds]` | Four-argument `SET` without the `EX` keyword |
+| `ERR invalid expire time` | TTL is not a positive integer |
+| `ERR unknown command: <NAME>` | Unrecognised command |
+| `Key cannot be empty` | An empty-string key was given |
+
+## Persistence
+
+Snapshots are plain JSON, written to `data/snapshot.json` (git-ignored) and loaded when the REPL starts:
+
+```json
+{
+  "version": 1,
+  "entries": [
+    { "key": "project", "value": "SulfurDB", "expiresAt": null },
+    { "key": "session", "value": "abc123", "expiresAt": 1791939600000 }
+  ]
+}
+```
+
+- `expiresAt` is a wall-clock timestamp in milliseconds, or `null` for keys that never expire
+- Entries that are already expired are skipped on both save and load
+- A snapshot with an unknown `version` is rejected
+
+## Project structure
+
+```
+.
+│── images/            # README screenshots
+├── src/
+│   ├── store.js             # Store class: storage, TTL, INCR/DECR, snapshot create/load
+│   ├── commands.js          # Tokenizer + command dispatcher
+│   ├── persistence.js       # Snapshot save/load (data/snapshot.json)
+│   └── repl.js              # Interactive terminal
+├── tests/
+│   ├── store_test.js        # Store smoke test
+│   └── api_test.js          # Express cache-aside example (benchmark target)
+├── package.json
+└── LICENSE
+```
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 18 or newer
+- Git
+
+### Setup
 
 ```bash
 git clone https://github.com/sulfurcodes/SulfurDB-An-in-memory-database.git
 cd SulfurDB-An-in-memory-database
 npm install
+npm start
 ```
 
-SulfurDB's core uses Node.js built-in modules. The repository also includes an Express-based integration example in `tests/api_test.js`, which uses the project's Express dependency.
+`npm install` is only needed for the Express example, since the database core uses Node.js built-ins.
 
-### Start the REPL
-
-```bash
-node src/repl.js
-```
-
-### Example Session
+### Example session
 
 ```text
-sulfurdb> PING
-PONG
-
-sulfurdb> SET username "Sulfurcodes"
+sulfurdb> SET username "sulfurcodes"
 OK
-
 sulfurdb> GET username
-Sulfurcodes
-
+sulfurcodes
 sulfurdb> SET session abc123 EX 60
 OK
-
 sulfurdb> TTL session
-57
-
+59
 sulfurdb> PERSIST session
 1
-
 sulfurdb> TTL session
 -1
-
+sulfurdb> INCR visits
+1
 sulfurdb> DEL username
 Deleted
-
 sulfurdb> EXIT
 ```
 
-The remaining TTL varies with elapsed time, so the displayed number is illustrative.
+## Using SulfurDB as a library
 
-## Architecture
+The `Store` class works on its own, with no REPL needed:
 
-SulfurDB separates storage, command processing, and terminal interaction.
+```js
+import Store from "./src/store.js";
 
-```text
-src/
-├── store.js       # In-memory storage and expiration logic
-├── commands.js    # Tokenizer and command dispatcher
-└── repl.js        # Interactive terminal interface
+const db = new Store();
 
-tests/
-├── store_test.js  # Current store smoke test
-└── api_test.js    # Express integration example
+db.set("session", "abc123", 60); // expires in 60 seconds
+db.get("session");               // "abc123"
+db.ttl("session");               // 59
+db.incr("visits");               // 1
 ```
 
-### Store
+### Deterministic expiry with an injected clock
 
-The `Store` class maintains a `Map` for values and a separate `Map` for expiration deadlines. Expired keys are purged lazily when operations access them.
+```js
+let time = 0;
+const db = new Store({ now: () => time });
 
-Expiration uses Node.js's monotonic performance clock. A custom clock can be injected into the store to test expiration behavior without waiting in real time.
+db.set("key", "value", 5);
+db.get("key");   // "value"
 
-### Command Parser and Dispatcher
-
-The command layer tokenizes input, validates command syntax and argument counts, and delegates operations to the `Store`.
-
-### REPL
-
-The REPL reads commands using Node.js `readline`, dispatches them, prints responses, and exits when `EXIT` is entered.
-
-### Express Integration Example
-
-`tests/api_test.js` shows how an Express route can use a `Store` instance as an in-process cache and return `X-Cache: HIT` or `X-Cache: MISS` headers. This is an example integration, not a standalone SulfurDB server; the data belongs to the process that created the `Store` instance.
-
-## Development and Tests
-
-Run the current store smoke-test file with:
-
-```bash
-node tests/store_test.js
+time = 5000;     // jump 5 seconds forward, no waiting
+db.get("key");   // null
 ```
 
-Run the Express integration example with:
+### As an Express cache
+
+`tests/api_test.js` shows a cache-aside route using a `Store` instance with a 10-second TTL and `X-Cache: HIT` / `MISS` headers:
+
+```js
+app.get("/api/posts", (req, res) => {
+  const cached = store.get("posts");
+  if (cached !== null) {
+    return res.set("X-Cache", "HIT").json(cached);
+  }
+  const data = { message: "Hello from SulfurDB" };
+  store.set("posts", data, 10);
+  res.set("X-Cache", "MISS").json(data);
+});
+```
+
+Run it with `node tests/api_test.js` (listens on port `5000`).
+
+## Benchmarks
+
+Load tested with **autocannon** against the Express cache-aside route above (`GET /api/posts`), with SulfurDB serving as the in-process cache.
 
 ```bash
 node tests/api_test.js
+npx autocannon -c 100 -d 30 -p 1 --renderStatusCodes http://localhost:5000/api/posts
 ```
 
-The Express example listens on port `5000`. These files are currently a smoke test and an integration example, not a comprehensive automated test suite. The package's `npm test` script is not configured yet.
+<img src="images/benchmark.png" width="100%" alt="autocannon benchmark results">
 
-## Current Limitations
+### Results
 
-- All data is held in memory and is lost when the process exits.
-- No standalone TCP database server or client is implemented.
-- SulfurDB does not implement the Redis wire protocol and is not compatible with standard Redis clients.
-- Disk persistence, snapshots, and recovery are not implemented.
-- Advanced data structures and additional database commands are not implemented.
-- The tokenizer needs stronger malformed-quoting validation and a documented escape grammar.
-- Automated test coverage is still limited.
-- The command interface and response conventions may evolve as development continues.
+| Connections | Duration | Avg RPS | Avg latency | p99 latency | Max latency | Total requests |
+|---|---|---|---|---|---|---|
+| 100 | 30s | 13,692 req/s | 6.8 ms | 11 ms | 93 ms | 410,766 (all `200`) |
+
+> These numbers measure the whole path (Express, HTTP and the SulfurDB lookup together), not the store in isolation. They were run locally on a development machine and should not be read as production capacity.
+
+## How it differs from Redis
+
+SulfurDB is an educational project, not a drop-in Redis replacement.
+
+| | Redis | SulfurDB |
+|---|---|---|
+| Access | TCP server, RESP protocol | In-process library + local REPL |
+| Compatibility | Works with standard clients | Not compatible with Redis clients |
+| `EXISTS` / `DEL` replies | Integers | `true`/`false` and `Deleted`/`Key does not exist` |
+| Persistence | RDB + AOF | Full JSON snapshot after each write |
+| Data types | Strings, lists, hashes, sets, ... | Strings (counters via `INCR`/`DECR`) |
+
+## Current limitations
+
+- No standalone TCP server or client, and no Redis wire protocol
+- Snapshots rewrite the whole dataset after each write, and are not yet written atomically
+- Expired keys are removed lazily, so a key that is never read again stays in memory until it is accessed
+- The tokenizer treats `'` and `"` as the same quote character, and has no documented escape grammar or malformed-quote validation
+- Only string values and a small command set (no lists, hashes, sets or `KEYS`)
+- Tests are currently a smoke test and an integration example, not a full automated suite
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+MIT

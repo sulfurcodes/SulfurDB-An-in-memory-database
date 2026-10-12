@@ -2,6 +2,5 @@
 dist/
 build/
 *.egg-info/
-sulfurdb_roadmap.md
 node_modules/
 data/snapshot.json
